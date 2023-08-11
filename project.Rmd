@@ -1,0 +1,92 @@
+---
+title: "Practical Machine Learning Project"
+output: html_document
+date: "2023-08-10"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Practical Machine Learning Course Project
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement -- a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+
+## Steps Needed
+
+The project would be broken down into the following steps:
+
+1.  Preprocessing the data.
+2.  Feature Selection.
+3.  Model Creation.
+4.  Prediction
+
+## Preprocessing the data
+In order to appropriately create train and test sets from the data given, some columns have to be removed. These are the columns that contain indices, names of the participants, and timestamps. These columns are of no use to the project at hand as we are only concerned on the data recorded by the sensors and predicting the movements based on that. In addition to this, some columns contain a lot of null values which could affect our column selection later on in the project. 
+
+```{r preprocessing, echo=FALSE, message=FALSE}
+library(caret)
+set.seed(27)
+
+dattrain = read.csv("pml-training.csv")
+dattest = read.csv("pml-testing.csv")
+testing = dattest[,-(1:7)]
+training = dattrain[,-(1:7)]
+training = training[,colMeans(is.na(training)) < .9]
+```
+
+
+## Feature Selection
+In feature selection we have to remove variables that have almost zero variance. These are readings on the human body that might not move as much as other variables. With this, we can ignore these variables are they are not as important to us which in turn saves compute resources during training and prediction.
+
+```{r feature}
+nvz <- nearZeroVar(training)
+length(nvz)
+colnames(training[,-nvz])
+```
+
+With this, we can see the most important variables in our dataset.
+
+Moving forward, we can now properly create the train and valid sets to be able to create predictions later on on the test set. 
+
+```{r feature1}
+idxvalid = createDataPartition(training$classe, p = 0.3, list = FALSE)
+valid = training[idxvalid,-nvz]
+training = training[-idxvalid,-nvz]
+```
+
+## Model Creation
+The following models are to be created in this project: decision trees, gradient boosted trees, and random forest. The training for these models would involve a 5-fold cross validation to be able to create the best prediction as possible and to validate that the creation of the train-valid sets does not affect how the models are trained.
+
+```{r decisiontrees, results=FALSE}
+# Creation of the models
+trainctrl <- trainControl(method="cv", number=5, verboseIter=F)
+
+model1 = train(classe~., data = training, method = "rpart", trControl = trainctrl) #decision trees
+model2 = train(classe~., data = training, method = "gbm", trControl = trainctrl) #gradient boosted trees
+model3 = train(classe~., data = training, method = "rf", trControl = trainctrl) #random forest
+```
+
+The evaluation of each model is done as follows. Confusion matrices are created to be able to show the accuracy.
+```{r eval, echo=FALSE}
+m1res = predict(model1, valid)
+m1cm = confusionMatrix(m1res, as.factor(valid$classe))
+m2res = predict(model2, valid)
+m2cm = confusionMatrix(m2res, as.factor(valid$classe))
+m3res = predict(model3, valid)
+m3cm = confusionMatrix(m3res, as.factor(valid$classe))
+
+print(paste0("Accuracy for Decision Trees:",m1cm$overall["Accuracy"]))
+print(paste0("Accuracy for Gradient Boosted Trees:",m2cm$overall["Accuracy"]))
+print(paste0("Accuracy for Random Forest:",m1cm$overall["Accuracy"]))
+```
+
+## Summary
+Random Forests had the best accuracy out of all the models created. With this, we predict the test set as follows:
+
+```{r test}
+testres = predict(model3, testing)
+testres
+```
